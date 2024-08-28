@@ -1,0 +1,27 @@
+#
+# COPYRIGHT Ericsson 2024
+#
+#
+#
+# The copyright to the computer program(s) herein is the property of
+#
+# Ericsson Inc. The programs may be used and/or copied only with written
+#
+# permission from Ericsson Inc. or in accordance with the terms and
+#
+# conditions stipulated in the agreement/contract under which the
+#
+# program(s) have been supplied.
+#
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "eric-odp-token-service.name" . }}-api
+  namespace: {{ .Release.Namespace }}
+  labels: {{- include "eric-odp-token-service.labels" . | nindent 4 }}
+  annotations: {{- include "eric-odp-token-service.annotations" . | nindent 4 }}
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "watch", "list", "create", "delete"]

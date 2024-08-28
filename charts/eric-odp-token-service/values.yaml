@@ -1,0 +1,119 @@
+#
+# COPYRIGHT Ericsson 2024
+#
+#
+#
+# The copyright to the computer program(s) herein is the property of
+#
+# Ericsson Inc. The programs may be used and/or copied only with written
+#
+# permission from Ericsson Inc. or in accordance with the terms and
+#
+# conditions stipulated in the agreement/contract under which the
+#
+# program(s) have been supplied.
+#
+
+# Default values for eric-odp-token-service.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+replicaCount: 1
+
+podDisruptionBudget:
+  minAvailable: 1
+
+updateStrategy:
+ type: RollingUpdate
+ rollingUpdate:
+   maxSurge: 1
+   maxUnavailable: 0
+
+# Custom labels
+labels: {}
+
+imageCredentials:
+  repoPath:
+  pullSecret:
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+container:
+  ports:
+    rest: 8080
+    metrics: 8002
+    health: 8003
+  appDeploymentDir: "/tmp/deployment"
+
+sso_service:
+  url: https://sso:8444
+
+service:
+  port: 8080
+  tlsMountPath: "/ericsson/credm/tlsMount"
+
+secretVolumesEnabled: false
+
+prometheus:
+  path: /actuator/prometheus
+  scrape: true
+
+topologySpreadConstraints: [ ]
+
+terminationGracePeriodSeconds: 30
+
+resources:
+  eric-odp-token-service:
+    requests:
+      memory: 512Mi
+      cpu: 300m
+    limits:
+      memory: 1024Mi
+      cpu: 1000m
+    jvm:
+      initialMemoryAllocationPercentage: 50
+      smallMemoryAllocationMaxPercentage: 90
+      largeMemoryAllocationMaxPercentage: 90
+
+nodeSelector: {}
+tolerations: []
+
+affinity:
+  podAntiAffinity: "soft"
+  topologyKey: "kubernetes.io/hostname"
+
+probes:
+  eric-odp-token-service:
+    livenessProbe:
+      failureThreshold: 3
+      initialDelaySeconds: 60
+      periodSeconds: 10
+      timeoutSeconds: 10
+    readinessProbe:
+      failureThreshold: 3
+      initialDelaySeconds: 60
+      periodSeconds: 10
+      timeoutSeconds: 10
+
+podPriority:
+  eric-odp-token-service:
+    priorityClassName: ""
+
+# DR D1123-127
+appArmorProfile:
+  # The setting applies to all container when the container name is omitted.
+  # { choice='unconfined, runtime/default, localhost, "" ' } [ default="" ]
+  type: ""
+
+# DR D1123-128
+seccompProfile:
+  # The setting applies to all container when the container name is omitted.
+  # { choice='unconfined, runtime/default, localhost, "" ' } [ default="" ]
+  type: ""

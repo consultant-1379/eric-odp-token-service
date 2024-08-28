@@ -1,0 +1,166 @@
+#
+# COPYRIGHT Ericsson 2024
+#
+#
+#
+# The copyright to the computer program(s) herein is the property of
+#
+# Ericsson Inc. The programs may be used and/or copied only with written
+#
+# permission from Ericsson Inc. or in accordance with the terms and
+#
+# conditions stipulated in the agreement/contract under which the
+#
+# program(s) have been supplied.
+#
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "eric-odp-token-service.fullname" . }}
+  labels: {{- include "eric-odp-token-service.labels" . | nindent 4 }}
+  annotations: {{- include "eric-odp-token-service.annotations-with-prometheus" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "eric-odp-token-service.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  strategy:
+    type: {{ .Values.updateStrategy.type | quote }}
+    {{- if and (eq .Values.updateStrategy.type "RollingUpdate") .Values.updateStrategy.rollingUpdate }}
+    rollingUpdate:
+      maxUnavailable: {{ .Values.updateStrategy.rollingUpdate.maxUnavailable }}
+      maxSurge: {{ .Values.updateStrategy.rollingUpdate.maxSurge }}
+    {{- end }}
+  template:
+    metadata:
+      labels:
+        {{- include "eric-odp-token-service.labels" . | nindent 8 }}
+      annotations:
+{{- include "eric-odp-token-service.annotations" . | nindent 8 }}
+{{- include "eric-odp-token-service.container-annotations" . | indent 8 }}
+    spec:
+      volumes:
+      {{- if .Values.secretVolumesEnabled }}
+        - name: keystore-volume
+          secret:
+            secretName: odp-token-service-keystore
+        - name: truststore-volume
+          secret:
+            secretName: odp-token-service-truststore
+      {{- end }}
+        - name: app-deployment-volume
+          emptyDir:
+            sizeLimit: 250Mi
+      {{- if include "eric-odp-token-service.pullSecret" . }}
+      imagePullSecrets:
+        - name: {{ include "eric-odp-token-service.pullSecret" . | quote}}
+      {{- end }}
+      serviceAccountName: {{ template "eric-odp-token-service.fullname" . }}-sa
+      containers:
+      - name: {{ .Chart.Name }}
+        image: {{ template "eric-odp-token-service.mainImagePath" . }}
+        imagePullPolicy: {{ template "eric-odp-token-service.registryImagePullPolicy" . }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          privileged: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          capabilities:
+            drop:
+            - all
+        ports:
+        - name: rest
+          containerPort: {{ .Values.container.ports.rest }}
+          protocol: TCP
+        env:
+        - name: ODP_TOKEN_SERVICE_HOSTNAME
+          value: {{ include "eric-odp-token-service.name" . | quote}}
+        - name: ODP_TOKEN_SERVICE_HTTP_PORT
+          value: {{ .Values.container.ports.rest | quote }}
+        - name: SSOSERVICE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "eric-odp-token-service.name" . }}-configmap
+              key: sso_service_url
+        - name: TLS_MOUNT_PATH
+          value: {{ .Values.service.tlsMountPath }}
+        - name: SERVICE_ID
+          value: {{ include "eric-odp-token-service.name" . | quote}}
+        - name: JAVA_OPTS
+          value: {{ include "eric-odp-token-service.jvmHeapSettings" . }}
+        - name: APP_DEPLOYMENT_DIR
+          value: {{ .Values.container.appDeploymentDir }}
+        - name: TZ
+          value: {{ template "eric-odp-token-service.timezone" . }}
+        resources:
+          requests:
+          {{- if (index .Values "resources" "eric-odp-token-service" "requests" "cpu") }}
+            cpu: {{ (index .Values "resources" "eric-odp-token-service" "requests" "cpu" | quote) }}
+          {{- end }}
+          {{- if (index .Values "resources" "eric-odp-token-service" "requests" "memory") }}
+            memory: {{ (index .Values "resources" "eric-odp-token-service" "requests" "memory" | quote) }}
+          {{- end }}
+          {{- if (index .Values "resources" "eric-odp-token-service" "requests" "ephemeral-storage") }}
+          {{ println "  ephemeral-storage:" (index .Values "resources" "eric-odp-token-service" "requests" "ephemeral-storage" | quote) }}
+          {{- end }}
+          limits:
+          {{- if (index .Values "resources" "eric-odp-token-service" "limits" "cpu") }}
+            cpu: {{ (index .Values "resources" "eric-odp-token-service" "limits" "cpu" | quote) }}
+          {{- end }}
+          {{- if (index .Values "resources" "eric-odp-token-service" "limits" "memory") }}
+            memory: {{ (index .Values "resources" "eric-odp-token-service" "limits" "memory" | quote) }}
+          {{- end }}
+          {{- if (index .Values "resources" "eric-odp-token-service" "limits" "ephemeral-storage") }}
+          {{ println "  ephemeral-storage:" (index .Values "resources" "eric-odp-token-service" "limits" "ephemeral-storage" | quote) }}
+          {{- end }}
+        volumeMounts:
+          - name: app-deployment-volume
+            mountPath: {{ .Values.container.appDeploymentDir }}
+        {{- if .Values.secretVolumesEnabled }}
+          - name: keystore-volume
+            mountPath: {{ .Values.service.tlsMountPath }}/keystore
+          - name: truststore-volume
+            mountPath: {{ .Values.service.tlsMountPath }}/truststore
+        {{- end }}
+      nodeSelector: {{ include "eric-odp-token-service.nodeSelector" . | nindent 6 -}}
+
+      {{- if .Values.terminationGracePeriodSeconds }}
+      terminationGracePeriodSeconds:
+        {{- include "eric-odp-token-service.terminationGracePeriodSeconds" . | nindent 8 }}
+      {{- end }}
+
+      tolerations: {{ include "eric-odp-token-service.merge-tolerations" (dict "root" .) | nindent 8 }}
+
+      {{- if (index .Values "podPriority" "eric-odp-token-service" "priorityClassName") }}
+      priorityClassName: {{ (index .Values "podPriority" "eric-odp-token-service" "priorityClassName") }}
+      {{- end }}
+
+      topologySpreadConstraints: {{ toYaml .Values.topologySpreadConstraints | nindent 8 }}
+
+      {{- if eq .Values.affinity.podAntiAffinity "hard" }}
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - {{ include "eric-odp-token-service.name" . }}
+            topologyKey: {{ .Values.affinity.topologyKey | quote }}
+      {{- else if eq .Values.affinity.podAntiAffinity  "soft" }}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - {{ include "eric-odp-token-service.name" . }}
+              topologyKey: {{ .Values.affinity.topologyKey | quote }}
+      {{- end }}
